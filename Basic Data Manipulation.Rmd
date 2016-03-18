@@ -1,0 +1,243 @@
+---
+title: "Basic Data Manipulation"
+author: "Nicholas Engel"
+date: "March 17, 2016"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, echo=TRUE, warning=FALSE, message=FALSE}
+library(dplyr)
+```
+
+## Introduction
+
+This is an RMarkdown-generated document that reports the various manipulations I made to the refine.xls data in order to accomplish the following five tasks:
+
+1. normalize the brand information;
+2. separate the product code and product number information into distinct categories;
+3. Create a new column with the product category information;
+4. concatenate the address information; and
+5. Add dummy variables for the company and product category data.
+
+Here is the raw data that we started with:
+
+```{r, echo=TRUE}
+
+refine <- read.csv("refine.csv", header = TRUE, sep = ",", quote = "\"",
+         dec = ".", fill = TRUE)
+
+print(refine)
+```
+
+Problems with this data include the messiness of particular data points and the concatenation of product code and number information into the same row variable.
+
+However, the data does have one advantage: it is already clearly divided into columns that indicate distinct variables, and rows that indicate distinct observations.  Thus there is no need to use tidyr's gather or spread functions in order to get this data into normal form.
+
+## 1. Normalizing Brand Information
+
+The brand information indicated in the "company" column is misspelled and does not have consistent capitalization.  
+
+We can resolve the issue of inconsistent capitalization in two steps.  
+
+First, we can universally lowercase all the characters in the relevant data columns. The function to use for this is the "tolower" function, which converts all upper-case characters in a character vector to lower-case characters. Second, we need to correct all the spelling errors.
+
+
+
+### 1.1 Universal lowercase
+
+First, lets universally lowercase the relevant "company" column:
+
+```{r}
+
+
+refine[, 1] <- tolower(refine[, 1])
+print(refine[, 1])
+
+```
+
+### 1.2 Spelling correction
+
+There is probably no automatic way to handle the many spelling errors in the "company" column of our dataset.  However, the particular idiosyncracies of the errors admit of patterns that we can exploit.  For example, every "phillips" entry correctly has the last two characters; every "akzo" entry correctly has the fist two characters; every "unilever" entry correctly has the first three characters; and every "van houten" entry is correct.
+
+We can exploit this with a series of ifelse functions:
+
+```{r}
+ for (i in 1:25 ) {
+  ifelse(substring(refine[i, 1], 1, 2) == "ak", refine[i, 1] <- "akzo", NA)
+  ifelse(substring(refine[i, 1], 1, 3) == "uni", refine[i, 1] <- "unilever", NA)
+  j <- nchar(refine[i, 1])
+  ifelse(substring(refine[i, 1], j-1, j) == "ps", refine[i, 1] <- "phillips", NA)
+}
+print(refine[1:25, 1])
+
+```
+
+Since "van houten" entries do not have any misspellings, we don't need to test for them.  We leave all the entries in lowercase because that is what the assignment asked us to do.
+
+## 2. Separating the Product Code and Product Number
+
+Each letter in the "Product Code and Product Number" column represents a product type, and each number represents a product number.  Since these are separate pieces of information, they should be indicated as such with distinct column variables.
+
+We can do this easily by manipulating the strings and using dplyr to mutate the data frame.  I also wrote a helper function to isolate the numerical content from the "Product Code and Product Number" column.
+
+Here's the helper function:
+
+```{r}
+
+productnumber <- function(x) {
+  for (i in 1:25)
+   j <- nchar(as.character(x))
+   substr(x, 3, j)
+}
+
+```
+
+And the mutate function:
+
+```{r}
+refine <- dplyr::mutate(refine, 
+  product_code = substr(refine[, 2], 1,1),
+  product_number = productnumber(refine[, 2])
+)
+print(refine[, 7:8])
+
+```
+
+## Adding Product Categories
+
+The product category information we generated above represents the following product categories:
+
+p = smartphone
+v = tv
+x = laptop
+q = tablet
+
+Let's add this information into our data frame with the help of another helper function.
+
+NOTE: This is surely not the most efficient way to do this.
+
+```{r}
+
+productcategory <- function(x) {
+  
+  ifelse(x == "p", j <- "smartphone", 
+  ifelse(x == "v", j <- "tv", 
+  ifelse(x == "x", j <- "laptop", 
+  ifelse(x == "q", j <- "tablet", NA))))
+ j
+}
+
+refine <- dplyr::mutate(refine, 
+  product_category = refine[, 7])
+
+for (i in 1:25) {
+  refine[i, 9] <- productcategory(as.character(refine[i, 9]))
+}
+```
+
+Here's the result:
+
+```{r}
+print(refine[c(7, 9)])
+
+```
+
+
+## 4. Concatenating the Address Information
+
+We can concatenate the address information contained in the "address", "city", and "country" columns by using the "paste" function.  As before, the output of our paste function can be added as an additional column in our data set with dplyr's "mutate" function.
+
+```{r}
+refine <- dplyr::mutate(refine, 
+  full_address = paste(address, city, country, sep=", ")
+)
+```
+
+And the result:
+
+
+```{r}
+print(refine[c(3:5, 10)])
+```
+
+## 5. Adding Dummy Variables
+
+For this last part of this assignment, we are asked to produce eight binary columns: one for each company, and one for each product category.  I'll do this again with ifthen loops defined into helper functions:
+
+```{r}
+
+phillipstest <- function(x) {
+  ifelse(x == "phillips", 1, 0)
+}
+
+akzotest <- function(x) {
+  ifelse(x == "akzo", 1, 0)
+}
+
+unilevertest <- function(x) {
+  ifelse(x == "unilever", 1, 0)
+}
+
+vanhoutentest <- function(x) {
+  ifelse(x == "van houten", 1, 0)
+}
+
+smartphonetest <- function(x) {
+  ifelse(x == "smartphone", 1, 0)
+}
+
+tvtest <- function(x) {
+  ifelse(x == "tv", 1, 0)
+}
+
+laptoptest <- function(x) {
+  ifelse(x == "laptop", 1, 0)
+}
+
+tablettest <- function(x) {
+  ifelse(x == "tablet", 1, 0)
+}
+
+```
+
+Now we can easily add the eight columns into our dataframe with the mutate function:
+
+```{r}
+
+refine <- dplyr::mutate(refine,
+ company_phillips = phillipstest(as.character(company)), 
+ company_akzo = akzotest(as.character(company)),
+ company_unilever = unilevertest(as.character(company)), 
+ company_van_houten = vanhoutentest(as.character(company)),
+ product_smartphone = smartphonetest(as.character(refine[, 9])),
+ product_tv = tvtest(as.character(refine[, 9])),
+ product_laptop = laptoptest(as.character(refine[, 9])),
+ product_tv = tvtest(as.character(refine[, 9])), 
+ product_tablet = tablettest(as.character(refine[, 9]))
+)
+
+```
+
+Here is the result for the company variables:
+
+```{r}
+print(refine[c(1, 11:14)])
+```
+
+And for the product variables:
+
+```{r}
+print(refine[c(9, 15:18)])
+```
+
+And the entire result:
+
+```{r}
+print(refine)
+```
+
+
